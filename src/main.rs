@@ -10,7 +10,8 @@ use crate::ui::views::{StartupDialog, Workspace};
 use blocking::{Task, unblock};
 use eframe::egui;
 use egui::{Color32, Context, Frame, Id, StrokeKind, ViewportBuilder};
-use std::mem;
+use std::path::PathBuf;
+use std::{env, mem};
 
 const APP_ID: &str = "SMDEd";
 
@@ -41,7 +42,15 @@ fn main() -> eframe::Result {
     eframe::run_native(
         APP_ID,
         native_options,
-        Box::new(|cc| Ok(Box::new(Application::new(cc)))),
+        Box::new(|cc| {
+            let project_path = env::args_os().nth(1).map(PathBuf::from);
+            let app = if let Some(project_path) = project_path {
+                Application::with_opened_project(cc, project_path)
+            } else {
+                Application::new(cc)
+            };
+            Ok(Box::new(app))
+        }),
     )
 }
 
@@ -52,6 +61,15 @@ enum ApplicationUiState {
     Invalid, // Used to facilitate state transitions
 }
 
+impl ApplicationUiState {
+    fn load_project(ctx: &Context, project_path: PathBuf) -> Self {
+        ApplicationUiState::LoadingProject(Promise::launched(
+            EguiWaker::for_context(ctx),
+            unblock(move || load_smart_project(&project_path)),
+        ))
+    }
+}
+
 struct Application {
     state: ApplicationUiState,
 }
@@ -60,6 +78,12 @@ impl Application {
     fn new(cc: &eframe::CreationContext) -> Self {
         Application {
             state: ApplicationUiState::NoOpenProject(StartupDialog::new(&cc.egui_ctx)),
+        }
+    }
+
+    fn with_opened_project(cc: &eframe::CreationContext, project_path: PathBuf) -> Self {
+        Application {
+            state: ApplicationUiState::load_project(&cc.egui_ctx, project_path),
         }
     }
 }
@@ -77,11 +101,7 @@ impl eframe::App for Application {
                     .show(ctx, |ui| startup_dialog.show_contents(ui, frame));
 
                 if modal_response.response.should_close() {
-                    let project_path = startup_dialog.get_result();
-                    ApplicationUiState::LoadingProject(Promise::launched(
-                        EguiWaker::for_context(ctx),
-                        unblock(move || load_smart_project(&project_path)),
-                    ))
+                    ApplicationUiState::load_project(ctx, startup_dialog.get_result())
                 } else {
                     ApplicationUiState::NoOpenProject(startup_dialog)
                 }
@@ -96,9 +116,12 @@ impl eframe::App for Application {
                 if let Some(project) = promise.take_response() {
                     match project {
                         Ok(project) => ApplicationUiState::ProjectLoaded(Workspace::new(project)),
-                        Err(e) => ApplicationUiState::NoOpenProject(
-                            StartupDialog::with_error_message(ctx, e.to_string()),
-                        ),
+                        Err(e) => {
+                            let message = format!("Error loading project: {e}");
+                            ApplicationUiState::NoOpenProject(StartupDialog::with_error_message(
+                                ctx, message,
+                            ))
+                        }
                     }
                 } else {
                     ApplicationUiState::LoadingProject(promise)
