@@ -50,6 +50,7 @@ impl Measurer {
         }
     }
 
+    #[expect(unused)]
     pub fn query_width(&self, ui: &mut Ui) -> Option<f32> {
         self.query(ui, UseFlags::WIDTH).map(|r| r.width())
     }
@@ -58,10 +59,12 @@ impl Measurer {
         self.query(ui, UseFlags::HEIGHT).map(|r| r.height())
     }
 
+    #[expect(unused)]
     pub fn query_size(&self, ui: &mut Ui) -> Option<Vec2> {
         self.query(ui, UseFlags::SIZE).map(|r| r.size())
     }
 
+    #[expect(unused)]
     pub fn query_rect(&self, ui: &mut Ui) -> Option<Rect> {
         self.query(ui, UseFlags::RECT)
     }

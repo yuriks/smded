@@ -9,7 +9,7 @@ use tracing::error;
 
 pub struct StartupDialog {
     picked_path_new: Promise<LocalBoxFuture<Option<rfd::FileHandle>>>,
-    pub(crate) picked_path: PathBuf,
+    picked_path: PathBuf,
 
     path_validation_result: Promise<Task<Result<(), String>>>,
 }
@@ -28,6 +28,10 @@ impl StartupDialog {
         let mut slf = Self::new(ctx);
         slf.path_validation_result.set_response(Err(err));
         slf
+    }
+
+    pub fn get_result(self) -> PathBuf {
+        self.picked_path
     }
 
     pub fn show_contents(&mut self, ui: &mut Ui, frame: &eframe::Frame) {
@@ -56,7 +60,6 @@ impl StartupDialog {
                 .clicked()
             {
                 ui.close();
-                error!("TODO");
             }
             if ui
                 .add_enabled(!self.picked_path_new.is_pending(), Button::new("Browse"))
@@ -106,9 +109,10 @@ impl StartupDialog {
             .sense(Sense::CLICK)
             .body(|body| {
                 body.rows(18.0, 5, |mut row| {
+                    // TODO: Recent projects list
                     let row_index = row.index();
                     row.col(|ui| {
-                        ui.label(format!("Room {}", row_index + 1));
+                        ui.label(format!("Test {}", row_index + 1));
                     });
                     if row.response().clicked() {
                         error!("TODO");

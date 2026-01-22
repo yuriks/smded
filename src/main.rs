@@ -77,9 +77,10 @@ impl eframe::App for Application {
                     .show(ctx, |ui| startup_dialog.show_contents(ui, frame));
 
                 if modal_response.response.should_close() {
+                    let project_path = startup_dialog.get_result();
                     ApplicationUiState::LoadingProject(Promise::launched(
                         EguiWaker::for_context(ctx),
-                        unblock(move || load_smart_project(&startup_dialog.picked_path)),
+                        unblock(move || load_smart_project(&project_path)),
                     ))
                 } else {
                     ApplicationUiState::NoOpenProject(startup_dialog)
