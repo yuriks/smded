@@ -1,3 +1,4 @@
+mod gfx;
 mod hex_types;
 mod project;
 #[allow(unused)]

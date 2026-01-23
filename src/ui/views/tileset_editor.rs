@@ -1,14 +1,23 @@
+use crate::gfx::Snes4BppTile;
 use crate::project::{ProjectData, Tileset, TilesetRef};
 use crate::ui::views::EditorWindow;
-use egui::{Id, Rect, Sense, Ui, Vec2, vec2};
+use egui::load::SizedTexture;
+use egui::{ColorImage, Id, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
+use tracing::info;
 
 pub struct TilesetEditor {
     tileset: TilesetRef,
+    texture: Option<TextureHandle>,
+    pal_line: usize,
 }
 
 impl TilesetEditor {
     pub fn new(tileset: TilesetRef) -> Self {
-        Self { tileset }
+        Self {
+            tileset,
+            texture: None,
+            pal_line: 0,
+        }
     }
 
     fn tileset<'p>(&self, project_data: &'p ProjectData) -> Option<&'p Tileset> {
@@ -39,21 +48,51 @@ impl EditorWindow for TilesetEditor {
             return;
         };
 
-        ui.heading("Palette:");
+        let palette_lines = tileset.palette.as_4bpp_lines();
+        ui.group(|ui| {
+            ui.label("Palette");
 
-        const CELL_SIZE: f32 = 16.0;
-        let lines = tileset.palette.as_4bpp_lines();
+            const CELL_SIZE: f32 = 16.0;
 
-        let (res, p) =
-            ui.allocate_painter(vec2(16.0, lines.len() as f32) * CELL_SIZE, Sense::CLICK);
-        let mut rect = Rect::from_min_size(res.rect.min, Vec2::splat(CELL_SIZE));
-        for line in lines {
-            let mut line_rect = rect;
-            for color in line {
-                p.rect_filled(line_rect, 0, *color);
-                line_rect = line_rect.translate(vec2(CELL_SIZE, 0.0));
+            let (res, p) = ui.allocate_painter(
+                vec2(16.0, palette_lines.len() as f32) * CELL_SIZE,
+                Sense::CLICK,
+            );
+            let mut rect = Rect::from_min_size(res.rect.min, Vec2::splat(CELL_SIZE));
+            for line in palette_lines {
+                let mut line_rect = rect;
+                for color in line {
+                    p.rect_filled(line_rect, 0, *color);
+                    line_rect = line_rect.translate(vec2(CELL_SIZE, 0.0));
+                }
+                rect = rect.translate(vec2(0.0, CELL_SIZE));
             }
-            rect = rect.translate(vec2(0.0, CELL_SIZE));
-        }
+        });
+
+        ui.group(|ui| {
+            ui.label("GFX");
+            ui.horizontal(|ui| {
+                ui.label("Palette:");
+                if ui.add(egui::Slider::new(&mut self.pal_line, 0..=palette_lines.len()-1)).changed() {
+                    self.texture = None;
+                }
+            });
+
+            let tex_handle = self.texture.get_or_insert_with(|| {
+                let (size, pixels) =
+                    Snes4BppTile::tiles_to_image(&tileset.gfx, &palette_lines[self.pal_line], 16);
+                //info!(?size, "Rendered image");
+                let image = ColorImage::new(size, pixels);
+                ui.ctx().load_texture(
+                    format!("tileset[{:?}]-pal[{:X}]", self.tileset, self.pal_line),
+                    image,
+                    TextureOptions::NEAREST,
+                )
+            });
+
+            let mut sized_texture = SizedTexture::from_handle(tex_handle);
+            sized_texture.size *= 2.0;
+            ui.image(sized_texture);
+        });
     }
 }

@@ -1,72 +1,9 @@
+use crate::gfx::{Palette, Snes4BppTile};
 use crate::smart_xml;
 use anyhow::anyhow;
-use egui::Color32;
 use slotmap::SlotMap;
 use std::collections::BTreeMap;
 use std::path::Path;
-use tracing::warn;
-
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct SnesColor(pub u16);
-
-impl SnesColor {
-    pub fn as_rgb_5bpc(self) -> [u16; 3] {
-        [(self.0) & 0x1F, (self.0 >> 5) & 0x1F, (self.0 >> 10) & 0x1F]
-    }
-
-    /// Returns color as a PC RGB triplet in 0-255 (i.e. the range is expanded)
-    pub fn as_rgb_8bpc(self) -> [u8; 3] {
-        self.as_rgb_5bpc()
-            .map(|x| { (x * 0xFF + (0x1F / 2)) / 0x1F } as u8)
-    }
-}
-
-impl From<SnesColor> for Color32 {
-    fn from(value: SnesColor) -> Self {
-        let [r, g, b] = value.as_rgb_8bpc();
-        Color32::from_rgb(r, g, b)
-    }
-}
-
-pub struct Palette(pub Vec<SnesColor>);
-
-impl Palette {
-    const LINE_4BPP_LEN: usize = 16;
-    const LINE_2BPP_LEN: usize = 4;
-
-    pub fn as_4bpp_lines(&self) -> &[[SnesColor; Self::LINE_4BPP_LEN]] {
-        let (lines, rest) = self.0.as_chunks();
-        if !rest.is_empty() {
-            warn!("Palette contains {} leftover entries", rest.len());
-        }
-        lines
-    }
-
-    #[expect(unused)]
-    pub fn as_2bpp_lines(&self) -> &[[SnesColor; Self::LINE_2BPP_LEN]] {
-        let (lines, rest) = self.0.as_chunks();
-        if !rest.is_empty() {
-            warn!("Palette contains {} leftover entries", rest.len());
-        }
-        lines
-    }
-
-    pub fn truncate_checked(&mut self, new_len: usize) -> Result<(), ()> {
-        if new_len > self.0.len() || self.0[new_len..].iter().any(|&SnesColor(x)| x != 0) {
-            Err(())
-        } else {
-            self.0.truncate(new_len);
-            Ok(())
-        }
-    }
-}
-
-impl From<Vec<u16>> for Palette {
-    fn from(v: Vec<u16>) -> Self {
-        Self(v.into_iter().map(SnesColor).collect())
-    }
-}
 
 type TilesetIndex = u8;
 pub struct Tileset {
@@ -74,6 +11,7 @@ pub struct Tileset {
     pub name: String,
 
     pub palette: Palette,
+    pub gfx: Vec<Snes4BppTile>,
 }
 slotmap::new_key_type! { pub struct TilesetRef; }
 
@@ -120,16 +58,27 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
         let name = tileset
             .metadata
             .map_or("Unnamed Tileset".into(), |meta| meta.name);
+
         let mut palette = Palette::from(tileset.palette);
         if let Err(()) = palette.truncate_checked(Palette::LINE_4BPP_LEN * 8) {
             return Err(anyhow!(
                 "Tileset {index:02X} palette has too many (non-blank) lines"
             ));
         }
+
+        let (tile_bytes, rest) = tileset.gfx.as_chunks();
+        if !rest.is_empty() {
+            return Err(anyhow!(
+                "Tileset {index:02X} gfx not evenly divisible as tiles"
+            ));
+        }
+        let gfx = tile_bytes.iter().map(Snes4BppTile::from_bytes).collect();
+
         let tileset = Tileset {
             index: Some(index),
             name,
             palette,
+            gfx,
         };
         // TODO encapsulate the combination of SlotMap + BTreeMap for index
         let tileset_ref = project.tilesets.insert(tileset);
