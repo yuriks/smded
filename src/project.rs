@@ -7,6 +7,7 @@ use std::path::Path;
 
 type TilesetIndex = u8;
 pub struct Tileset {
+    handle: TilesetRef,
     index: Option<TilesetIndex>,
     pub name: String,
 
@@ -16,6 +17,10 @@ pub struct Tileset {
 slotmap::new_key_type! { pub struct TilesetRef; }
 
 impl Tileset {
+    pub fn handle(&self) -> TilesetRef {
+        self.handle
+    }
+
     #[expect(unused)]
     pub fn index(&self) -> Option<TilesetIndex> {
         self.index
@@ -74,14 +79,14 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
         }
         let gfx = tile_bytes.iter().map(Snes4BppTile::from_bytes).collect();
 
-        let tileset = Tileset {
+        // TODO encapsulate the combination of SlotMap + BTreeMap for index
+        let tileset_ref = project.tilesets.insert_with_key(|handle| Tileset {
+            handle,
             index: Some(index),
             name,
             palette,
             gfx,
-        };
-        // TODO encapsulate the combination of SlotMap + BTreeMap for index
-        let tileset_ref = project.tilesets.insert(tileset);
+        });
         project.tileset_ids.insert(index, tileset_ref);
     }
 
