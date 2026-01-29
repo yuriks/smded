@@ -83,7 +83,7 @@ fn decode_bitplane_pair([bp01, bp23]: [u16; 2]) -> u32 {
 #[derive(Copy, Clone)]
 pub struct Snes4BppTile(pub [u16; TILE_SIZE * 2]);
 
-const TILE_SIZE: usize = 8;
+pub const TILE_SIZE: usize = 8;
 
 impl Snes4BppTile {
     pub fn from_bytes(data: &[u8; 32]) -> Self {

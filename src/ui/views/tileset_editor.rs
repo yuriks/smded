@@ -1,10 +1,16 @@
+use crate::gfx;
 use crate::gfx::{Snes4BppTile, SnesColor};
-use crate::project::{ProjectData, Tileset, TilesetRef};
+use crate::project::{ProjectData, Tileset, TilesetRef, TiletableEntry};
 use crate::ui::views::EditorWindow;
 use crate::ui::{TileCacheKey, TileTextureCache};
 use egui::emath::GuiRounding;
 use egui::load::SizedTexture;
-use egui::{ColorImage, Id, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
+use egui::{
+    Color32, ColorImage, Id, Mesh, Rect, Response, Sense, TextureFilter, TextureHandle,
+    TextureOptions, Ui, Vec2, pos2, vec2,
+};
+use gfx::TILE_SIZE;
+use std::mem;
 
 pub struct TilesetEditor {
     tileset: TilesetRef,
@@ -27,7 +33,7 @@ impl TilesetEditor {
         project_data.tilesets.get_mut(self.tileset)
     }
 
-    fn draw_palette_grid(ui: &mut Ui, palette_lines: &[[SnesColor; 16]]) {
+    fn draw_palette_grid(ui: &mut Ui, palette_lines: &[[SnesColor; 16]]) -> Response {
         const CELL_SIZE: f32 = 16.0;
 
         let (res, p) = ui.allocate_painter(
@@ -43,6 +49,8 @@ impl TilesetEditor {
             }
             rect = rect.translate(vec2(0.0, CELL_SIZE));
         }
+
+        res
     }
 
     fn get_tileset_texture(
@@ -61,9 +69,102 @@ impl TilesetEditor {
             let (size, pixels) = Snes4BppTile::tiles_to_image(&tileset.gfx, palette_line, 16);
             let image = ColorImage::new(size, pixels);
 
-            ctx.load_texture(texture_name, image, TextureOptions::NEAREST)
+            ctx.load_texture(
+                texture_name,
+                image,
+                TextureOptions {
+                    minification: TextureFilter::Linear,
+                    ..TextureOptions::NEAREST
+                },
+            )
         })
     }
+
+    fn draw_tiletable_grid(
+        ui: &mut Ui,
+        tileset: &Tileset,
+        entries_per_row: usize,
+        scale: f32,
+    ) -> Response {
+        const CELL_SIZE: usize = TILE_SIZE * 2;
+
+        let ttb = &tileset.tiletable;
+        let num_lines = ttb.len().div_ceil(entries_per_row);
+
+        let mut meshes_per_palette = [const { None }; 8]; // TODO constant for num palette lines
+
+        let (res, p) = ui.allocate_painter(
+            (CELL_SIZE as f32) * scale * vec2(entries_per_row as f32, num_lines as f32),
+            Sense::CLICK,
+        );
+        // Required to avoid NEAREST filtering artifacts/shimmer
+        let rounded_origin = res.rect.min.round_to_pixels(ui.pixels_per_point());
+
+        for (line, y_pos) in ttb.chunks(entries_per_row).zip((0..).step_by(CELL_SIZE)) {
+            for (TiletableEntry(tiles), x_pos) in line.iter().zip((0..).step_by(CELL_SIZE)) {
+                for (tile, rect_offset) in tiles.iter().zip(&[
+                    (0, 0),
+                    (TILE_SIZE, 0),
+                    (0, TILE_SIZE),
+                    (TILE_SIZE, TILE_SIZE),
+                ]) {
+                    if tile.tile_id() >= tileset.gfx.len() {
+                        continue;
+                    }
+
+                    let tile_rect = Rect::from_min_size(
+                        pos2(
+                            (x_pos + rect_offset.0) as f32,
+                            (y_pos + rect_offset.1) as f32,
+                        ),
+                        Vec2::splat(TILE_SIZE as f32),
+                    );
+
+                    let (mesh, texture) =
+                        meshes_per_palette[tile.palette()].get_or_insert_with(|| {
+                            let texture = Self::get_tileset_texture(
+                                ui.ctx(),
+                                tileset,
+                                u8::try_from(tile.palette()).unwrap(),
+                            );
+                            (Mesh::with_texture(texture.id()), texture)
+                        });
+                    let tile_row = tile.tile_id() / (texture.size()[0] / TILE_SIZE);
+                    let tile_col = tile.tile_id() % (texture.size()[0] / TILE_SIZE);
+
+                    let mut uv = Rect::from_min_size(
+                        pos2((tile_col * TILE_SIZE) as f32, (tile_row * TILE_SIZE) as f32),
+                        Vec2::splat(TILE_SIZE as f32),
+                    );
+                    if tile.h_flip() {
+                        mem::swap(&mut uv.min.x, &mut uv.max.x);
+                    }
+                    if tile.v_flip() {
+                        mem::swap(&mut uv.min.y, &mut uv.max.y);
+                    }
+
+                    mesh.add_rect_with_uv(
+                        (tile_rect * scale).translate(rounded_origin.to_vec2()),
+                        scale_rect_by_vec2(uv, texture.size_vec2()),
+                        Color32::WHITE,
+                    );
+                }
+            }
+        }
+
+        for (mesh, _) in meshes_per_palette.into_iter().flatten() {
+            p.add(mesh);
+        }
+
+        res
+    }
+}
+
+fn scale_rect_by_vec2(rect: Rect, scale: Vec2) -> Rect {
+    Rect::from_min_max(
+        (rect.min.to_vec2() / scale).to_pos2(),
+        (rect.max.to_vec2() / scale).to_pos2(),
+    )
 }
 
 impl EditorWindow for TilesetEditor {
@@ -85,28 +186,38 @@ impl EditorWindow for TilesetEditor {
             return;
         };
 
-        let palette_lines = tileset.palette.as_4bpp_lines();
-        ui.group(|ui| {
-            ui.label("Palette");
-            Self::draw_palette_grid(ui, palette_lines);
-        });
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                let palette_lines = tileset.palette.as_4bpp_lines();
+                ui.group(|ui| {
+                    ui.label("Palette");
+                    Self::draw_palette_grid(ui, palette_lines);
+                });
 
-        ui.group(|ui| {
-            ui.label("GFX");
-            ui.horizontal(|ui| {
-                ui.label("Palette:");
-                ui.add(egui::Slider::new(
-                    &mut self.pal_line,
-                    0..=palette_lines.len() - 1,
-                ));
+                ui.group(|ui| {
+                    ui.label("GFX");
+                    ui.horizontal(|ui| {
+                        ui.label("Palette:");
+                        ui.add(egui::Slider::new(
+                            &mut self.pal_line,
+                            0..=palette_lines.len() - 1,
+                        ));
+                    });
+
+                    let tex_handle =
+                        Self::get_tileset_texture(ui.ctx(), tileset, self.pal_line as u8);
+                    let sized_texture = SizedTexture::from_handle(&tex_handle);
+
+                    // TODO: Implement a band-limited pixel art resizing shader or similar instead
+                    let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
+                    ui.add(egui::Image::new(sized_texture).fit_to_original_size(scale_factor));
+                });
             });
 
-            let tex_handle = Self::get_tileset_texture(ui.ctx(), tileset, self.pal_line as u8);
-            let sized_texture = SizedTexture::from_handle(&tex_handle);
-
-            // TODO: Implement a band-limited pixel art resizing shader or similar instead
-            let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
-            ui.add(egui::Image::new(sized_texture).fit_to_original_size(scale_factor));
+            ui.vertical(|ui| {
+                let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
+                Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);
+            });
         });
     }
 }

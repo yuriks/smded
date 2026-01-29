@@ -1,9 +1,39 @@
 use crate::gfx::{Palette, Snes4BppTile};
 use crate::smart_xml;
 use anyhow::anyhow;
+use bit_field::BitField;
 use slotmap::SlotMap;
 use std::collections::BTreeMap;
 use std::path::Path;
+
+#[derive(Copy, Clone)]
+pub struct TilemapEntry(pub u16);
+
+// TODO: Replace with bitfields! macro?
+impl TilemapEntry {
+    pub fn tile_id(self) -> usize {
+        usize::from(self.0.get_bits(0..10))
+    }
+
+    pub fn h_flip(self) -> bool {
+        self.0.get_bit(14)
+    }
+
+    pub fn v_flip(self) -> bool {
+        self.0.get_bit(15)
+    }
+
+    pub fn priority(self) -> bool {
+        self.0.get_bit(13)
+    }
+
+    pub fn palette(self) -> usize {
+        usize::from(self.0.get_bits(10..13))
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct TiletableEntry(pub [TilemapEntry; 4]);
 
 type TilesetIndex = u8;
 pub struct Tileset {
@@ -13,6 +43,7 @@ pub struct Tileset {
 
     pub palette: Palette,
     pub gfx: Vec<Snes4BppTile>,
+    pub tiletable: Vec<TiletableEntry>,
 }
 slotmap::new_key_type! { pub struct TilesetRef; }
 
@@ -79,6 +110,17 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
         }
         let gfx = tile_bytes.iter().map(Snes4BppTile::from_bytes).collect();
 
+        let (tiletable_entries, rest) = tileset.tiletable.as_chunks::<4>();
+        if !rest.is_empty() {
+            return Err(anyhow!(
+                "Tileset {index:02X} tiletable has truncated trailing entry"
+            ));
+        }
+        let tiletable = tiletable_entries
+            .iter()
+            .map(|tiles| TiletableEntry(tiles.map(TilemapEntry)))
+            .collect();
+
         // TODO encapsulate the combination of SlotMap + BTreeMap for index
         let tileset_ref = project.tilesets.insert_with_key(|handle| Tileset {
             handle,
@@ -86,6 +128,7 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
             name,
             palette,
             gfx,
+            tiletable,
         });
         project.tileset_ids.insert(index, tileset_ref);
     }

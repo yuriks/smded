@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+bit_field = "0.10.3"
 bitflags = "2.10.0"
 blocking = "1.6.2"
 bytemuck = { version = "1.24.0", features = ["min_const_generics", "extern_crate_alloc", "derive"] }
