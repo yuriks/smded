@@ -10,7 +10,7 @@ use crate::ui::promise::{EguiWaker, Promise};
 use crate::ui::views::{StartupDialog, Workspace};
 use blocking::{Task, unblock};
 use eframe::egui;
-use egui::{Color32, Context, Frame, Id, StrokeKind, ViewportBuilder};
+use egui::{Color32, Context, Frame, Id, StrokeKind, ViewportBuilder, Visuals};
 use std::path::PathBuf;
 use std::{env, mem};
 
@@ -134,6 +134,13 @@ impl eframe::App for Application {
             }
             ApplicationUiState::Invalid => unreachable!(),
         }
+    }
+
+    fn clear_color(&self, visuals: &Visuals) -> [f32; 4] {
+        visuals
+            .window_fill
+            .gamma_multiply(0.5)
+            .to_normalized_gamma_f32()
     }
 }
 
