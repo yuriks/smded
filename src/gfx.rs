@@ -1,6 +1,7 @@
 use crate::project::{LevelDataEntry, TilemapEntry, Tileset};
+use crate::util::IteratorArrayExt;
 use egui::Color32;
-use std::{array, iter};
+use std::iter;
 use tracing::warn;
 
 #[repr(transparent)]
@@ -38,6 +39,12 @@ impl Palette {
             warn!("Palette contains {} leftover entries", rest.len());
         }
         lines
+    }
+
+    pub fn to_4bpp_color32_lines(&self) -> impl Iterator<Item = [Color32; Self::LINE_4BPP_LEN]> {
+        self.as_4bpp_lines()
+            .iter()
+            .map(|line| line.map(Color32::from))
     }
 
     #[expect(unused)]
@@ -177,9 +184,10 @@ pub fn tiletable_to_image(
     let mut pixels = vec![Color32::TRANSPARENT; width * height];
     let slivers = pixels.as_chunks_mut::<TILE_SIZE>().0;
 
-    let mut it = tileset.palette.0.iter().copied().map(Color32::from).fuse();
-    let palettes_c32: [[_; Palette::LINE_4BPP_LEN]; 8] =
-        array::from_fn(|_| array::from_fn(|_| it.next().unwrap_or(Color32::TRANSPARENT)));
+    let palettes_c32: [_; 8] = tileset
+        .palette
+        .to_4bpp_color32_lines()
+        .collect_to_array_padded(|| [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]);
 
     for (block_y, row_slivers) in slivers
         .chunks_exact_mut(tiles_per_row * BLOCK_SIZE)

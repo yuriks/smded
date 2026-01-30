@@ -4,6 +4,7 @@ mod project;
 #[allow(unused)]
 mod smart_xml;
 mod ui;
+mod util;
 
 use crate::project::{ProjectData, load_smart_project};
 use crate::ui::promise::{EguiWaker, Promise};
