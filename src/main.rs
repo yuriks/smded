@@ -37,7 +37,7 @@ fn main() -> eframe::Result {
     configure_tracing();
 
     let native_options = eframe::NativeOptions {
-        viewport: ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
+        viewport: ViewportBuilder::default().with_inner_size([1920.0, 1080.0]),
         ..Default::default()
     };
     eframe::run_native(
