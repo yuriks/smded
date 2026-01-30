@@ -1,5 +1,5 @@
-use eframe::epaint::Color32;
-use std::{array, iter};
+use egui::Color32;
+use std::iter;
 use tracing::warn;
 
 #[repr(transparent)]
@@ -64,39 +64,34 @@ impl From<Vec<u16>> for Palette {
     }
 }
 
-fn spread_u16_x4(x: u16) -> u64 {
-    let mut x = u64::from(x);
-    x = 0x0000_00FF_0000_00FF & (x | x << 24);
-    x = 0x000F_000F_000F_000F & (x | x << 12);
-    x = 0x0303_0303_0303_0303 & (x | x << 6);
-    x = 0x1111_1111_1111_1111 & (x | x << 3);
+fn spread_u8_x4(x: u8) -> u32 {
+    let mut x = u32::from(x);
+    x = 0x000F_000F & (x | x << 12);
+    x = 0x0303_0303 & (x | x << 6);
+    x = 0x1111_1111 & (x | x << 3);
     x
 }
 
-fn decode_bitplane_pair([bp01, bp23]: [u16; 2]) -> u32 {
-    let bp0_bp1 = spread_u16_x4(bp01);
-    let bp2_bp3 = spread_u16_x4(bp23);
-    (bp0_bp1 | bp0_bp1 >> (32 - 1)) as u32 | (bp2_bp3 << 2 | bp2_bp3 >> (32 - 3)) as u32
+fn decode_bitplanes(bitplanes: [u8; 4]) -> u32 {
+    let spread = bitplanes.map(spread_u8_x4);
+    spread[0] | spread[1] << 1 | spread[2] << 2 | spread[3] << 3
 }
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Snes4BppTile(pub [u16; TILE_SIZE * 2]);
+pub struct Snes4BppTile(pub [u8; TILE_SIZE * 4]);
 
 pub const TILE_SIZE: usize = 8;
 
 impl Snes4BppTile {
     pub fn from_bytes(data: &[u8; 32]) -> Self {
-        let (pairs, _) = data.as_chunks::<2>();
-        Self(array::from_fn(|i| u16::from_le_bytes(pairs[i])))
+        Self(*data)
     }
 
-    fn bitplane_pairs(&self) -> [[u16; 2]; TILE_SIZE] {
-        array::from_fn(|i| [self.0[i], self.0[i + TILE_SIZE]])
-    }
-
-    fn interleaved_rows(&self) -> [u32; TILE_SIZE] {
-        self.bitplane_pairs().map(decode_bitplane_pair)
+    fn bitplane_sets(&self) -> impl Iterator<Item = [u8; 4]> {
+        let (pairs, _) = self.0.as_chunks::<2>();
+        let (bp01, bp23) = pairs.split_at(TILE_SIZE);
+        iter::zip(bp01, bp23).map(|(&[bp0, bp1], &[bp2, bp3])| [bp0, bp1, bp2, bp3])
     }
 
     pub fn write_to_image<'p, const USE_TRANSPARENCY: bool>(
@@ -104,7 +99,7 @@ impl Snes4BppTile {
         palette: &[Color32; Palette::LINE_4BPP_LEN],
         output: impl Iterator<Item = &'p mut [Color32; TILE_SIZE]>,
     ) {
-        for (mut bp, out_row) in iter::zip(self.interleaved_rows(), output) {
+        for (mut bp, out_row) in self.bitplane_sets().map(decode_bitplanes).zip(output) {
             for out_p in out_row {
                 let index = bp >> (32 - 4);
                 bp <<= 4;
