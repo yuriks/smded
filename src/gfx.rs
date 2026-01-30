@@ -1,5 +1,4 @@
-use crate::project::{LevelDataEntry, TilemapEntry, Tileset};
-use crate::util::IteratorArrayExt;
+use crate::project::TilemapEntry;
 use egui::Color32;
 use std::iter;
 use tracing::warn;
@@ -179,75 +178,4 @@ pub trait GridModel {
 
     fn dimensions(&self) -> [usize; 2];
     fn get(&self, x: usize, y: usize) -> Option<Self::Item>;
-}
-
-pub fn tiletable_to_image(
-    tileset: &Tileset,
-    model: &impl GridModel<Item = LevelDataEntry>,
-) -> ([usize; 2], Vec<Color32>) {
-    const BLOCK_SIZE: usize = TILE_SIZE * 2;
-
-    let [blocks_per_row, n_rows] = model.dimensions();
-    let tiles_per_row = blocks_per_row * 2;
-    let [width, height] = [blocks_per_row * BLOCK_SIZE, n_rows * BLOCK_SIZE];
-    let mut pixels = vec![Color32::TRANSPARENT; width * height];
-    let slivers = pixels.as_chunks_mut::<TILE_SIZE>().0;
-
-    let palettes_c32: [_; 8] = tileset
-        .palette
-        .to_4bpp_color32_lines()
-        .collect_to_array_padded(|| [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]);
-
-    for (block_y, row_slivers) in slivers
-        .chunks_exact_mut(tiles_per_row * BLOCK_SIZE)
-        .enumerate()
-    {
-        for block_x in 0..blocks_per_row {
-            let Some(block) = model.get(block_x, block_y) else {
-                continue;
-            };
-            let Some(mut block_entry) = tileset
-                .tiletable
-                .get(usize::from(block.block_id()))
-                .copied()
-            else {
-                continue;
-            };
-            if block.h_flip() {
-                block_entry.0.swap(0, 1);
-                block_entry.0.swap(2, 3);
-                for TilemapEntry(entry) in &mut block_entry.0 {
-                    *entry ^= TilemapEntry::H_FLIP_FLAG;
-                }
-            }
-            if block.v_flip() {
-                block_entry.0.swap(0, 2);
-                block_entry.0.swap(1, 3);
-                for TilemapEntry(entry) in &mut block_entry.0 {
-                    *entry ^= TilemapEntry::V_FLIP_FLAG;
-                }
-            }
-            for subtile_y in 0..2 {
-                let subrow_slivers = &mut row_slivers[tiles_per_row * (TILE_SIZE * subtile_y)..]
-                    [..tiles_per_row * TILE_SIZE];
-                for subtile_x in 0..2 {
-                    let output_slivers = subrow_slivers[block_x * 2 + subtile_x..]
-                        .iter_mut()
-                        .step_by(tiles_per_row);
-                    let tile_entry = block_entry.0[subtile_y * 2 + subtile_x];
-                    let Some(tile) = tileset.gfx.get(tile_entry.tile_id()) else {
-                        continue;
-                    };
-                    let palette_line = palettes_c32[tile_entry.palette()];
-                    tile.write_to_image_flippable::<false>(
-                        &palette_line,
-                        output_slivers,
-                        [tile_entry.h_flip(), tile_entry.v_flip()],
-                    );
-                }
-            }
-        }
-    }
-
-    ([width, height], pixels)
 }

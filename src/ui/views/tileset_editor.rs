@@ -5,6 +5,7 @@ use crate::project::{
 };
 use crate::ui::views::EditorWindow;
 use crate::ui::{TileCacheKey, TileTextureCache};
+use crate::util::IteratorArrayExt;
 use egui::emath::GuiRounding;
 use egui::load::SizedTexture;
 use egui::{
@@ -103,7 +104,7 @@ impl TilesetEditor {
         TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx| {
             let texture_name = format!("tileset[{:?}]-ttb", tileset.handle());
 
-            let (size, pixels) = gfx::tiletable_to_image(
+            let (size, pixels) = tiletable_to_image(
                 tileset,
                 &FullTiletableModel {
                     len: tileset.tiletable.len(),
@@ -201,6 +202,69 @@ impl TilesetEditor {
 
         res
     }
+}
+
+struct BlockTilemapModel<'tileset, M>
+where
+    M: GridModel<Item = LevelDataEntry>,
+{
+    blocks: &'tileset M,
+    tiletable: &'tileset [TiletableEntry],
+}
+
+impl<M> GridModel for BlockTilemapModel<'_, M>
+where
+    M: GridModel<Item = LevelDataEntry>,
+{
+    type Item = TilemapEntry;
+
+    fn dimensions(&self) -> [usize; 2] {
+        let [block_w, block_h] = self.blocks.dimensions();
+        [block_w * 2, block_h * 2]
+    }
+
+    fn get(&self, x: usize, y: usize) -> Option<Self::Item> {
+        let [block_x, block_y] = [x / 2, y / 2];
+        let block = self.blocks.get(block_x, block_y)?;
+        let TiletableEntry(subtiles) = self.tiletable.get(usize::from(block.block_id()))?;
+
+        let [mut subtile_x, mut subtile_y] = [x % 2, y % 2];
+        if block.h_flip() {
+            subtile_x ^= 1;
+        }
+        if block.v_flip() {
+            subtile_y ^= 1;
+        }
+
+        let mut subtile = subtiles[subtile_y * 2 + subtile_x];
+        if block.h_flip() {
+            subtile.0 ^= TilemapEntry::H_FLIP_FLAG;
+        }
+        if block.v_flip() {
+            subtile.0 ^= TilemapEntry::V_FLIP_FLAG;
+        }
+
+        Some(subtile)
+    }
+}
+
+pub fn tiletable_to_image(
+    tileset: &Tileset,
+    model: &impl GridModel<Item = LevelDataEntry>,
+) -> ([usize; 2], Vec<Color32>) {
+    let palettes_c32: [_; 8] = tileset
+        .palette
+        .to_4bpp_color32_lines()
+        .collect_to_array_padded(|| [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]);
+
+    Snes4BppTile::tiles_to_image(
+        &tileset.gfx,
+        &palettes_c32,
+        &BlockTilemapModel {
+            blocks: model,
+            tiletable: &tileset.tiletable,
+        },
+    )
 }
 
 struct FullTilesetGfxModel {
