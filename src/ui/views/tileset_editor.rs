@@ -1,6 +1,8 @@
 use crate::gfx;
-use crate::gfx::{GridModel, Snes4BppTile, SnesColor};
-use crate::project::{LevelDataEntry, ProjectData, Tileset, TilesetRef, TiletableEntry};
+use crate::gfx::{GridModel, Palette, Snes4BppTile, SnesColor};
+use crate::project::{
+    LevelDataEntry, ProjectData, TilemapEntry, Tileset, TilesetRef, TiletableEntry,
+};
 use crate::ui::views::EditorWindow;
 use crate::ui::{TileCacheKey, TileTextureCache};
 use egui::emath::GuiRounding;
@@ -10,7 +12,7 @@ use egui::{
     TextureOptions, Ui, Vec2, pos2, vec2,
 };
 use gfx::TILE_SIZE;
-use std::mem;
+use std::{array, mem};
 
 pub struct TilesetEditor {
     tileset: TilesetRef,
@@ -64,9 +66,23 @@ impl TilesetEditor {
         };
         TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx| {
             let texture_name = format!("tileset[{:?}]-pal[{:X}]", tileset.handle(), palette_line);
-            let palette_line = &tileset.palette.as_4bpp_lines()[palette_line as usize];
 
-            let (size, pixels) = Snes4BppTile::tiles_to_image(&tileset.gfx, palette_line, 16);
+            let palette = array::from_fn(|i| {
+                if i == 0 {
+                    tileset.palette.as_4bpp_lines()[palette_line as usize].map(Color32::from)
+                } else {
+                    [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]
+                }
+            });
+
+            let (size, pixels) = Snes4BppTile::tiles_to_image(
+                &tileset.gfx,
+                &palette,
+                &FullTilesetGfxModel {
+                    len: tileset.gfx.len(),
+                    palette_index: 0,
+                },
+            );
             let image = ColorImage::new(size, pixels);
 
             ctx.load_texture(
@@ -184,6 +200,29 @@ impl TilesetEditor {
         }
 
         res
+    }
+}
+
+struct FullTilesetGfxModel {
+    len: usize,
+    palette_index: usize,
+}
+
+impl FullTilesetGfxModel {
+    const TILES_PER_ROW: usize = 16;
+}
+
+impl GridModel for FullTilesetGfxModel {
+    type Item = TilemapEntry;
+
+    fn dimensions(&self) -> [usize; 2] {
+        [Self::TILES_PER_ROW, self.len.div_ceil(Self::TILES_PER_ROW)]
+    }
+
+    fn get(&self, x: usize, y: usize) -> Option<Self::Item> {
+        let tile_id = Self::TILES_PER_ROW * y + x;
+        (tile_id < self.len)
+            .then(|| TilemapEntry::for_tile(tile_id).with_palette(self.palette_index))
     }
 }
 

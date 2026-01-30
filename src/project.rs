@@ -33,6 +33,16 @@ impl TilemapEntry {
     pub fn palette(self) -> usize {
         usize::from(self.0.get_bits(10..13))
     }
+
+    // TODO: Silently discards overflow
+    pub fn for_tile(tile: usize) -> Self {
+        Self((tile & ((1 << 10) - 1)) as u16)
+    }
+
+    pub fn with_palette(mut self, pal: usize) -> Self {
+        self.0.set_bits(10..13, pal as u16);
+        self
+    }
 }
 
 #[derive(Copy, Clone)]

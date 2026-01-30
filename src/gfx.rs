@@ -141,23 +141,32 @@ impl Snes4BppTile {
 
     pub fn tiles_to_image(
         tiles: &[Snes4BppTile],
-        palette: &[SnesColor; Palette::LINE_4BPP_LEN],
-        tiles_per_row: usize,
+        palette: &[[Color32; Palette::LINE_4BPP_LEN]; 8],
+        model: &impl GridModel<Item = TilemapEntry>,
     ) -> ([usize; 2], Vec<Color32>) {
-        let n_rows = tiles.len().div_ceil(tiles_per_row);
+        let [tiles_per_row, n_rows] = model.dimensions();
         let [width, height] = [tiles_per_row * TILE_SIZE, n_rows * TILE_SIZE];
         let mut pixels = vec![Color32::TRANSPARENT; width * height];
         let slivers = pixels.as_chunks_mut::<TILE_SIZE>().0;
 
-        let palette_c32 = palette.map(Color32::from);
+        for (tile_y, row_slivers) in slivers
+            .chunks_exact_mut(tiles_per_row * TILE_SIZE)
+            .enumerate()
+        {
+            for tile_x in 0..tiles_per_row {
+                let Some(tile) = model.get(tile_x, tile_y) else {
+                    continue;
+                };
+                let Some(tile_gfx) = &tiles.get(tile.tile_id()) else {
+                    continue;
+                };
 
-        for (tiles, row_slivers) in iter::zip(
-            tiles.chunks(tiles_per_row),
-            slivers.chunks_exact_mut(tiles_per_row * TILE_SIZE),
-        ) {
-            for (column, tile) in tiles.iter().enumerate() {
-                let output_slivers = row_slivers[column..].iter_mut().step_by(tiles_per_row);
-                tile.write_to_image::<false, false>(&palette_c32, output_slivers);
+                let output_slivers = row_slivers[tile_x..].iter_mut().step_by(tiles_per_row);
+                tile_gfx.write_to_image_flippable::<false>(
+                    &palette[tile.palette()],
+                    output_slivers,
+                    [tile.h_flip(), tile.v_flip()],
+                );
             }
         }
 
