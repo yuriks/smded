@@ -1,8 +1,6 @@
 use crate::gfx;
-use crate::gfx::{GridModel, Palette, Snes4BppTile, SnesColor};
-use crate::project::{
-    LevelDataEntry, ProjectData, TilemapEntry, Tileset, TilesetRef, TiletableEntry,
-};
+use crate::gfx::{GridModel, Palette, Snes4BppTile, SnesColor, TilemapEntry};
+use crate::project::{LevelDataEntry, ProjectData, Tileset, TilesetRef, TiletableEntry};
 use crate::ui::views::EditorWindow;
 use crate::ui::{TileCacheKey, TileTextureCache};
 use crate::util::IteratorArrayExt;

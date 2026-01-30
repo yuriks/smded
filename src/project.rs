@@ -1,49 +1,10 @@
-use crate::gfx::{Palette, Snes4BppTile};
+use crate::gfx::{Palette, Snes4BppTile, TilemapEntry};
 use crate::smart_xml;
 use anyhow::anyhow;
 use bit_field::BitField;
 use slotmap::SlotMap;
 use std::collections::BTreeMap;
 use std::path::Path;
-
-#[derive(Copy, Clone)]
-pub struct TilemapEntry(pub u16);
-
-// TODO: Replace with bitfields! macro?
-impl TilemapEntry {
-    pub fn tile_id(self) -> usize {
-        usize::from(self.0.get_bits(0..10))
-    }
-
-    pub const H_FLIP_FLAG: u16 = 1 << 14;
-    pub fn h_flip(self) -> bool {
-        self.0.get_bit(14)
-    }
-
-    pub const V_FLIP_FLAG: u16 = 1 << 15;
-    pub fn v_flip(self) -> bool {
-        self.0.get_bit(15)
-    }
-
-    #[expect(unused)]
-    pub fn priority(self) -> bool {
-        self.0.get_bit(13)
-    }
-
-    pub fn palette(self) -> usize {
-        usize::from(self.0.get_bits(10..13))
-    }
-
-    // TODO: Silently discards overflow
-    pub fn for_tile(tile: usize) -> Self {
-        Self((tile & ((1 << 10) - 1)) as u16)
-    }
-
-    pub fn with_palette(mut self, pal: usize) -> Self {
-        self.0.set_bits(10..13, pal as u16);
-        self
-    }
-}
 
 #[derive(Copy, Clone)]
 pub struct TiletableEntry(pub [TilemapEntry; 4]);
