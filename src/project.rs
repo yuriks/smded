@@ -15,14 +15,17 @@ impl TilemapEntry {
         usize::from(self.0.get_bits(0..10))
     }
 
+    pub const H_FLIP_FLAG: u16 = 1 << 14;
     pub fn h_flip(self) -> bool {
         self.0.get_bit(14)
     }
 
+    pub const V_FLIP_FLAG: u16 = 1 << 15;
     pub fn v_flip(self) -> bool {
         self.0.get_bit(15)
     }
 
+    #[expect(unused)]
     pub fn priority(self) -> bool {
         self.0.get_bit(13)
     }
@@ -34,6 +37,41 @@ impl TilemapEntry {
 
 #[derive(Copy, Clone)]
 pub struct TiletableEntry(pub [TilemapEntry; 4]);
+
+#[derive(Copy, Clone)]
+pub struct LevelDataEntry(pub u16);
+
+impl LevelDataEntry {
+    /// Tile index into the tiletable.
+    pub fn block_id(self) -> u16 {
+        self.0.get_bits(0..10)
+    }
+
+    pub fn h_flip(self) -> bool {
+        self.0.get_bit(11)
+    }
+
+    pub fn v_flip(self) -> bool {
+        self.0.get_bit(12)
+    }
+
+    #[expect(unused)]
+    pub fn block_type(self) -> u16 {
+        self.0.get_bits(12..)
+    }
+
+    // TODO: Silently discards overflow
+    pub fn for_tile(tile: u16) -> Self {
+        Self(tile & ((1 << 10) - 1))
+    }
+
+    #[expect(unused)]
+    pub fn with_flips(mut self, h_flip: bool, v_flip: bool) -> Self {
+        self.0.set_bit(11, h_flip);
+        self.0.set_bit(12, v_flip);
+        self
+    }
+}
 
 type TilesetIndex = u8;
 pub struct Tileset {

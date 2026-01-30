@@ -1,6 +1,6 @@
 use crate::gfx;
-use crate::gfx::{Snes4BppTile, SnesColor};
-use crate::project::{ProjectData, Tileset, TilesetRef, TiletableEntry};
+use crate::gfx::{GridModel, Snes4BppTile, SnesColor};
+use crate::project::{LevelDataEntry, ProjectData, Tileset, TilesetRef, TiletableEntry};
 use crate::ui::views::EditorWindow;
 use crate::ui::{TileCacheKey, TileTextureCache};
 use egui::emath::GuiRounding;
@@ -53,12 +53,12 @@ impl TilesetEditor {
         res
     }
 
-    fn get_tileset_texture(
+    fn get_tileset_gfx_texture(
         ctx: &egui::Context,
         tileset: &Tileset,
         palette_line: u8,
     ) -> TextureHandle {
-        let cache_key = TileCacheKey::Tileset {
+        let cache_key = TileCacheKey::TilesetGfx {
             tileset: tileset.handle(),
             palette_line,
         };
@@ -80,6 +80,33 @@ impl TilesetEditor {
         })
     }
 
+    fn get_tileset_ttb_texture(ctx: &egui::Context, tileset: &Tileset) -> TextureHandle {
+        let cache_key = TileCacheKey::TilesetTtb {
+            tileset: tileset.handle(),
+        };
+        TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx| {
+            let texture_name = format!("tileset[{:?}]-ttb", tileset.handle());
+
+            let (size, pixels) = gfx::tiletable_to_image(
+                tileset,
+                &FullTiletableModel {
+                    len: tileset.tiletable.len(),
+                },
+            );
+            let image = ColorImage::new(size, pixels);
+
+            ctx.load_texture(
+                texture_name,
+                image,
+                TextureOptions {
+                    minification: TextureFilter::Linear,
+                    ..TextureOptions::NEAREST
+                },
+            )
+        })
+    }
+
+    #[expect(unused)]
     fn draw_tiletable_grid(
         ui: &mut Ui,
         tileset: &Tileset,
@@ -122,7 +149,7 @@ impl TilesetEditor {
 
                     let (mesh, texture) =
                         meshes_per_palette[tile.palette()].get_or_insert_with(|| {
-                            let texture = Self::get_tileset_texture(
+                            let texture = Self::get_tileset_gfx_texture(
                                 ui.ctx(),
                                 tileset,
                                 u8::try_from(tile.palette()).unwrap(),
@@ -157,6 +184,30 @@ impl TilesetEditor {
         }
 
         res
+    }
+}
+
+struct FullTiletableModel {
+    len: usize,
+}
+
+impl FullTiletableModel {
+    const BLOCKS_PER_ROW: usize = 32;
+}
+
+impl GridModel for FullTiletableModel {
+    type Item = LevelDataEntry;
+
+    fn dimensions(&self) -> [usize; 2] {
+        [
+            Self::BLOCKS_PER_ROW,
+            self.len.div_ceil(Self::BLOCKS_PER_ROW),
+        ]
+    }
+
+    fn get(&self, x: usize, y: usize) -> Option<Self::Item> {
+        let tile_id = Self::BLOCKS_PER_ROW * y + x;
+        (tile_id < self.len).then(|| LevelDataEntry::for_tile(tile_id as u16))
     }
 }
 
@@ -205,7 +256,7 @@ impl EditorWindow for TilesetEditor {
                     });
 
                     let tex_handle =
-                        Self::get_tileset_texture(ui.ctx(), tileset, self.pal_line as u8);
+                        Self::get_tileset_gfx_texture(ui.ctx(), tileset, self.pal_line as u8);
                     let sized_texture = SizedTexture::from_handle(&tex_handle);
 
                     // TODO: Implement a band-limited pixel art resizing shader or similar instead
@@ -215,8 +266,15 @@ impl EditorWindow for TilesetEditor {
             });
 
             ui.vertical(|ui| {
-                let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
-                Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);
+                ui.group(|ui| {
+                    ui.label("Tiletable");
+                    let tex_handle = Self::get_tileset_ttb_texture(ui.ctx(), tileset);
+                    let sized_texture = SizedTexture::from_handle(&tex_handle);
+
+                    let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
+                    ui.add(egui::Image::new(sized_texture).fit_to_original_size(scale_factor));
+                    //Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);`
+                })
             });
         });
     }

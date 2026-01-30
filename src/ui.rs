@@ -11,9 +11,12 @@ pub mod views;
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub enum TileCacheKey {
     // TODO: Figure out how to cleanly handle invalidation
-    Tileset {
+    TilesetGfx {
         tileset: TilesetRef,
         palette_line: u8,
+    },
+    TilesetTtb {
+        tileset: TilesetRef,
     },
 }
 
