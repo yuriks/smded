@@ -338,7 +338,7 @@ impl EditorWindow for TilesetEditor {
             return;
         };
 
-        ui.horizontal(|ui| {
+        ui.horizontal_centered(|ui| {
             ui.vertical(|ui| {
                 let palette_lines = tileset.palette.as_4bpp_lines();
                 ui.group(|ui| {
@@ -356,25 +356,43 @@ impl EditorWindow for TilesetEditor {
                         ));
                     });
 
-                    let tex_handle =
-                        Self::get_tileset_gfx_texture(ui.ctx(), tileset, self.pal_line as u8);
-                    let sized_texture = SizedTexture::from_handle(&tex_handle);
+                    egui::ScrollArea::vertical()
+                        .max_height(f32::INFINITY)
+                        .id_salt("gfx_scrollarea")
+                        .show(ui, |ui| {
+                            let tex_handle = Self::get_tileset_gfx_texture(
+                                ui.ctx(),
+                                tileset,
+                                self.pal_line as u8,
+                            );
+                            let sized_texture = SizedTexture::from_handle(&tex_handle);
 
-                    // TODO: Implement a band-limited pixel art resizing shader or similar instead
-                    let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
-                    ui.add(egui::Image::new(sized_texture).fit_to_original_size(scale_factor));
+                            // TODO: Implement a band-limited pixel art resizing shader or similar instead
+                            let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
+                            ui.add(
+                                egui::Image::new(sized_texture).fit_to_original_size(scale_factor),
+                            );
+                        });
                 });
             });
 
             ui.vertical(|ui| {
                 ui.group(|ui| {
                     ui.label("Tiletable");
-                    let tex_handle = Self::get_tileset_ttb_texture(ui.ctx(), tileset);
-                    let sized_texture = SizedTexture::from_handle(&tex_handle);
+                    egui::ScrollArea::both()
+                        .max_width(f32::INFINITY)
+                        .max_height(f32::INFINITY)
+                        .id_salt("tiletable_scrollarea")
+                        .show(ui, |ui| {
+                            let tex_handle = Self::get_tileset_ttb_texture(ui.ctx(), tileset);
+                            let sized_texture = SizedTexture::from_handle(&tex_handle);
 
-                    let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
-                    ui.add(egui::Image::new(sized_texture).fit_to_original_size(scale_factor));
-                    //Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);`
+                            let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
+                            ui.add(
+                                egui::Image::new(sized_texture).fit_to_original_size(scale_factor),
+                            );
+                            //Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);`
+                        });
                 })
             });
         });

@@ -11,6 +11,7 @@ trait EditorWindow {
     fn title(&self, project_data: &ProjectData) -> String;
     fn stable_id(&self) -> Id;
     fn show_contents(&mut self, project_data: &mut ProjectData, ui: &mut Ui);
+
     fn show_window(&mut self, project_data: &mut ProjectData, ctx: &Context) -> Option<Response> {
         let mut stay_open = true;
         egui::Window::new(self.title(project_data))
