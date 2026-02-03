@@ -21,11 +21,14 @@ impl Workspace {
         egui::SidePanel::left("editor_list").show(ctx, |ui| {
             ui.collapsing("Tilesets", |ui| {
                 for (tileset_ref, tileset) in &self.project_data.tilesets {
+                    if tileset.palette.is_empty() {
+                        continue;
+                    }
                     if ui
                         .add(egui::Button::new(tileset.title()).frame_when_inactive(false))
                         .clicked()
                     {
-                        let editor = TilesetEditor::new(tileset_ref);
+                        let editor = TilesetEditor::new(ctx, tileset_ref, &self.project_data);
 
                         // If there's an existing editor open, bring that to front instead
                         let editor_id = editor.stable_id();

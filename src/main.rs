@@ -3,6 +3,7 @@ mod hex_types;
 mod project;
 #[allow(unused)]
 mod smart_xml;
+mod tileset;
 mod ui;
 mod util;
 

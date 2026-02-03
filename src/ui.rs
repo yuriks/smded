@@ -1,23 +1,54 @@
 use crate::project::TilesetRef;
+use crate::tileset::TilesetVramLayout;
 use egui::cache::CacheTrait;
 use egui::{Context, TextureHandle};
 use std::any::Any;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 mod measurer;
 pub mod promise;
 pub mod views;
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum TileCacheKey {
     // TODO: Figure out how to cleanly handle invalidation
+    #[expect(unused)]
     TilesetGfx {
         tileset: TilesetRef,
         palette_line: u8,
     },
-    TilesetTtb {
-        tileset: TilesetRef,
+    #[expect(unused)]
+    TilesetTtb { tileset: TilesetRef },
+    VramLayoutGfx {
+        layout: TilesetVramLayout<TilesetRef>,
+        palette_line: u8,
     },
+    VramLayoutTtb {
+        layout: TilesetVramLayout<TilesetRef>,
+    },
+}
+
+impl TileCacheKey {
+    /// Returns a descriptive string to use as a debugging name for the texture
+    fn texture_name(&self) -> String {
+        match self {
+            TileCacheKey::TilesetGfx {
+                tileset,
+                palette_line,
+            } => format!("tileset[{tileset:?}]-pal[{palette_line:X}]"),
+            TileCacheKey::TilesetTtb { tileset } => format!("tileset[{tileset:?}]-ttb"),
+            TileCacheKey::VramLayoutGfx {
+                layout,
+                palette_line,
+            } => {
+                let mut s = layout.cache_texture_name();
+                write!(s, "-pal[{palette_line:X}]").unwrap();
+                s
+            }
+            TileCacheKey::VramLayoutTtb { layout } => layout.cache_texture_name() + "-ttb",
+        }
+    }
 }
 
 #[derive(Default)]
@@ -59,12 +90,12 @@ impl TileTextureCache {
     pub fn get_or_insert_with(
         ctx: &Context,
         key: TileCacheKey,
-        f: impl FnOnce(&Context) -> TextureHandle,
+        f: impl FnOnce(&Context, &TileCacheKey) -> TextureHandle,
     ) -> TextureHandle {
         if let Some(cached) = Self::for_context(ctx, |cache| cache.get(&key).cloned()) {
             return cached;
         }
-        let to_insert = f(ctx);
+        let to_insert = f(ctx, &key);
         Self::for_context(ctx, |cache| cache.insert(key, to_insert).clone())
     }
 }

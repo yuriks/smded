@@ -63,6 +63,10 @@ impl Palette {
             Ok(())
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl From<Vec<u16>> for Palette {
@@ -177,8 +181,8 @@ impl Snes4BppTile {
         }
     }
 
-    pub fn tiles_to_image(
-        tiles: &[Snes4BppTile],
+    pub fn tiles_to_image<'p>(
+        mut get_tile: impl FnMut(usize) -> Option<&'p Snes4BppTile>,
         palette: &[[Color32; Palette::LINE_4BPP_LEN]; 8],
         model: &impl GridModel<Item = TilemapEntry>,
     ) -> ([usize; 2], Vec<Color32>) {
@@ -195,7 +199,7 @@ impl Snes4BppTile {
                 let Some(tile) = model.get(tile_x, tile_y) else {
                     continue;
                 };
-                let Some(tile_gfx) = &tiles.get(tile.tile_id()) else {
+                let Some(tile_gfx) = get_tile(tile.tile_id()) else {
                     continue;
                 };
 
