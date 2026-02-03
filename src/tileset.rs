@@ -1,6 +1,5 @@
 use crate::gfx::Palette;
-use crate::project::{Tileset, TilesetRef};
-use std::fmt::Write;
+use crate::project::Tileset;
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TilesetVramLayoutEntry<T> {
@@ -57,18 +56,6 @@ impl TilesetVramLayout<&Tileset> {
             .iter()
             .map(|e| &e.tileset.palette)
             .rfind(|p| !p.is_empty())
-    }
-}
-
-impl TilesetVramLayout<TilesetRef> {
-    // TODO: TilesetVramLayout needs to be moved
-    pub(crate) fn cache_texture_name(&self) -> String {
-        let mut s = String::from("layout");
-        for e in &self.0 {
-            write!(&mut s, "-0x{:X}[{:?}]", e.base, e.tileset).unwrap();
-        }
-
-        s
     }
 }
 

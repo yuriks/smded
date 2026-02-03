@@ -1,13 +1,13 @@
-use egui::{Context, Id};
+use egui::Id;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task;
 use std::task::{Poll, Waker};
 
-pub struct EguiWaker(Context);
+pub struct EguiWaker(egui::Context);
 
 impl EguiWaker {
-    pub fn for_context(ctx: &Context) -> Waker {
+    pub fn for_context(ctx: &egui::Context) -> Waker {
         if let Some(egui_waker) = ctx.data(|data| data.get_temp::<Arc<EguiWaker>>(Id::NULL)) {
             Waker::from(egui_waker)
         } else {
@@ -18,7 +18,8 @@ impl EguiWaker {
             Waker::from(egui_waker)
         }
     }
-    fn new(ctx: Context) -> Arc<EguiWaker> {
+
+    fn new(ctx: egui::Context) -> Arc<EguiWaker> {
         Arc::new(EguiWaker(ctx))
     }
 }
