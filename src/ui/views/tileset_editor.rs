@@ -92,11 +92,11 @@ impl EditorWindow for TilesetEditor {
             .cre_tileset
             .and_then(|hnd| project_data.tilesets.get(hnd))
             .or_else(|| find_default_cre(ui.ctx(), project_data));
-        let (gfx_layout, ttb_layout) = tileset::detect_sources_layout(tileset, cre_tileset);
+        let tileset_layout = tileset::detect_sources_layout(tileset, cre_tileset);
 
         ui.horizontal_centered(|ui| {
             ui.vertical(|ui| {
-                let palette_lines = tileset.palette.as_4bpp_lines();
+                let palette_lines = tileset_layout.palette_source.palette.as_4bpp_lines();
                 ui.group(|ui| {
                     ui.label("Palette");
                     Self::draw_palette_grid(ui, palette_lines);
@@ -118,7 +118,8 @@ impl EditorWindow for TilesetEditor {
                         .show(ui, |ui| {
                             let tex_handle = tile_view::get_tileset_gfx_texture(
                                 ui.ctx(),
-                                &gfx_layout,
+                                &tileset_layout.gfx,
+                                tileset_layout.palette_source,
                                 self.pal_line as u8,
                             );
                             let sized_texture = SizedTexture::from_handle(&tex_handle);
@@ -140,18 +141,15 @@ impl EditorWindow for TilesetEditor {
                         .max_height(f32::INFINITY)
                         .id_salt("tiletable_scrollarea")
                         .show(ui, |ui| {
-                            let tex_handle = tile_view::get_tileset_ttb_texture(
-                                ui.ctx(),
-                                &gfx_layout,
-                                &ttb_layout,
-                            );
+                            let tex_handle =
+                                tile_view::get_tileset_ttb_texture(ui.ctx(), &tileset_layout);
                             let sized_texture = SizedTexture::from_handle(&tex_handle);
 
                             let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());
                             ui.add(
                                 egui::Image::new(sized_texture).fit_to_original_size(scale_factor),
                             );
-                            //Self::draw_tiletable_grid(ui, tileset, 32, scale_factor);`
+                            // tile_view::draw_tiletable_grid(ui, &tileset_layout, scale_factor);
                         });
                 })
             });

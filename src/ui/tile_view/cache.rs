@@ -1,36 +1,30 @@
 use crate::project::TilesetRef;
-use crate::tileset::TilesetVramLayout;
+use crate::tileset::{LoadedTilesetLayout, OverlaidLayout};
 use egui::cache::CacheTrait;
 use egui::{Context, TextureHandle};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum TileCacheKey {
     // TODO: Figure out how to cleanly handle invalidation
-    #[expect(unused)]
-    TilesetGfx {
-        tileset: TilesetRef,
+    LoadedGfxLayout {
+        gfx_layout: OverlaidLayout<TilesetRef>,
+        palette_source: TilesetRef,
         palette_line: u8,
     },
-    #[expect(unused)]
-    TilesetTtb { tileset: TilesetRef },
-    VramLayoutGfx {
-        layout: TilesetVramLayout<TilesetRef>,
-        palette_line: u8,
-    },
-    VramLayoutTtb {
-        layout: TilesetVramLayout<TilesetRef>,
+    LoadedTilesetLayout {
+        layout: LoadedTilesetLayout<TilesetRef>,
     },
 }
 
 impl TileCacheKey {
     /// Returns a descriptive non-unique string to use as a debugging name for the texture
     pub fn texture_name(&self) -> String {
-        fn layout_cache_texture_name(tileset: &TilesetVramLayout<TilesetRef>) -> String {
+        fn layout_cache_texture_name(tileset: &OverlaidLayout<TilesetRef>) -> String {
             let mut s = String::from("layout");
-            for e in &tileset.0 {
+            for e in &tileset.entries {
                 write!(&mut s, "-0x{:X}[{:?}]", e.base, e.tileset).unwrap();
             }
 
@@ -38,20 +32,18 @@ impl TileCacheKey {
         }
 
         match self {
-            TileCacheKey::TilesetGfx {
-                tileset,
-                palette_line,
-            } => format!("tileset[{tileset:?}]-pal[{palette_line:X}]"),
-            TileCacheKey::TilesetTtb { tileset } => format!("tileset[{tileset:?}]-ttb"),
-            TileCacheKey::VramLayoutGfx {
-                layout,
+            TileCacheKey::LoadedGfxLayout {
+                gfx_layout,
+                palette_source,
                 palette_line,
             } => {
-                let mut s = layout_cache_texture_name(layout);
-                write!(s, "-pal[{palette_line:X}]").unwrap();
+                let mut s = layout_cache_texture_name(gfx_layout);
+                write!(s, "-pal{palette_line:X}[{palette_source:?}]").unwrap();
                 s
             }
-            TileCacheKey::VramLayoutTtb { layout } => layout_cache_texture_name(layout) + "-ttb",
+            TileCacheKey::LoadedTilesetLayout { layout } => {
+                layout_cache_texture_name(&layout.tiletable) + "-ttb"
+            }
         }
     }
 }

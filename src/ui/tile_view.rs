@@ -2,13 +2,13 @@ mod cache;
 
 use crate::gfx::{GridModel, Palette, Snes4BppTile, TILE_SIZE, TilemapEntry};
 use crate::project::{LevelDataEntry, Tileset, TiletableEntry};
-use crate::tileset::TilesetVramLayout;
+use crate::tileset::{LoadedTilesetLayout, OverlaidLayout};
 use crate::ui::tile_view::cache::{TileCacheKey, TileTextureCache};
 use crate::util::IteratorArrayExt;
 use egui::emath::GuiRounding;
 use egui::{
     Color32, ColorImage, Mesh, Rect, Response, Sense, TextureFilter, TextureHandle, TextureOptions,
-    Ui, Vec2, pos2, vec2,
+    Ui, Vec2, pos2,
 };
 use std::{array, mem};
 
@@ -37,19 +37,19 @@ impl GridModel for FullTilesetGfxModel {
 
 pub fn get_tileset_gfx_texture(
     ctx: &egui::Context,
-    layout: &TilesetVramLayout<&Tileset>,
+    gfx_layout: &OverlaidLayout<&Tileset>,
+    palette_source: &Tileset,
     palette_line: u8,
 ) -> TextureHandle {
-    let cache_key = TileCacheKey::VramLayoutGfx {
-        layout: layout.map_values(Tileset::handle),
+    let cache_key = TileCacheKey::LoadedGfxLayout {
+        gfx_layout: gfx_layout.map_ref(Tileset::handle),
+        palette_source: palette_source.handle(),
         palette_line,
     };
     TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx, cache_key| {
         let palette = array::from_fn(|i| {
-            if i == 0
-                && let Some(palette) = layout.find_palette()
-            {
-                palette.as_4bpp_lines()[usize::from(palette_line)].map(Color32::from)
+            if i == 0 {
+                palette_source.palette.as_4bpp_lines()[usize::from(palette_line)].map(Color32::from)
             } else {
                 [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]
             }
@@ -57,12 +57,12 @@ pub fn get_tileset_gfx_texture(
 
         let (size, pixels) = Snes4BppTile::tiles_to_image(
             |tile_id| {
-                let (tileset, offset) = layout.lookup(tile_id)?;
+                let (tileset, offset) = gfx_layout.lookup(tile_id)?;
                 tileset.gfx.get(offset)
             },
             &palette,
             &FullTilesetGfxModel {
-                len: layout.valid_range().map_or(0, |(_, end)| end),
+                len: gfx_layout.valid_range().map_or(0, |(_, end)| end),
                 palette_index: 0,
             },
         );
@@ -79,14 +79,14 @@ pub fn get_tileset_gfx_texture(
     })
 }
 
-struct BlockTilemapModel<'tileset, M, F> {
-    blocks: &'tileset M,
+struct BlockTilemapModel<'tileset, Model, F> {
+    blocks: &'tileset Model,
     tiletable_get: F,
 }
 
-impl<M, F> GridModel for BlockTilemapModel<'_, M, F>
+impl<Model, F> GridModel for BlockTilemapModel<'_, Model, F>
 where
-    M: GridModel<Item = LevelDataEntry>,
+    Model: GridModel<Item = LevelDataEntry>,
     F: Fn(usize) -> Option<TiletableEntry>,
 {
     type Item = TilemapEntry;
@@ -122,26 +122,25 @@ where
 }
 
 fn tiletable_to_image(
-    gfx_layout: &TilesetVramLayout<&Tileset>,
-    ttb_layout: &TilesetVramLayout<&Tileset>,
+    layout: &LoadedTilesetLayout<&Tileset>,
     model: &impl GridModel<Item = LevelDataEntry>,
 ) -> ([usize; 2], Vec<Color32>) {
-    let palettes_c32: [_; 8] = ttb_layout
-        .find_palette()
-        .iter()
-        .flat_map(|p| p.to_4bpp_color32_lines())
+    let palettes_c32: [_; 8] = layout
+        .palette_source
+        .palette
+        .to_4bpp_color32_lines()
         .collect_to_array_padded(|| [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]);
 
     Snes4BppTile::tiles_to_image(
         |tile_id| {
-            let (tileset, offset) = gfx_layout.lookup(tile_id)?;
+            let (tileset, offset) = layout.gfx.lookup(tile_id)?;
             tileset.gfx.get(offset)
         },
         &palettes_c32,
         &BlockTilemapModel {
             blocks: model,
             tiletable_get: |i| {
-                let (tileset, offset) = ttb_layout.lookup(i)?;
+                let (tileset, offset) = layout.tiletable.lookup(i)?;
                 tileset.tiletable.get(offset).copied()
             },
         },
@@ -174,19 +173,17 @@ impl GridModel for FullTiletableModel {
 
 pub fn get_tileset_ttb_texture(
     ctx: &egui::Context,
-    gfx_layout: &TilesetVramLayout<&Tileset>,
-    ttb_layout: &TilesetVramLayout<&Tileset>,
+    layout: &LoadedTilesetLayout<&Tileset>,
 ) -> TextureHandle {
-    let cache_key = TileCacheKey::VramLayoutTtb {
-        layout: ttb_layout.map_values(Tileset::handle),
+    let cache_key = TileCacheKey::LoadedTilesetLayout {
+        layout: layout.map_refs(Tileset::handle),
     };
     TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx, cache_key| {
         let texture_name = cache_key.texture_name();
         let (size, pixels) = tiletable_to_image(
-            gfx_layout,
-            ttb_layout,
+            layout,
             &FullTiletableModel {
-                len: ttb_layout.valid_range().map_or(0, |(_, end)| end),
+                len: layout.tiletable.valid_range().map_or(0, |(_, end)| end),
             },
         );
         let image = ColorImage::new(size, pixels);
@@ -203,11 +200,9 @@ pub fn get_tileset_ttb_texture(
 }
 
 #[expect(unused)]
-fn draw_tiletable_grid(
+pub fn draw_tiletable_grid(
     ui: &mut Ui,
-    tileset: &Tileset,
-    gfx_layout: TilesetVramLayout<&Tileset>,
-    entries_per_row: usize,
+    layout: &LoadedTilesetLayout<&Tileset>,
     scale: f32,
 ) -> Response {
     fn scale_rect_by_vec2(rect: Rect, scale: Vec2) -> Rect {
@@ -217,68 +212,65 @@ fn draw_tiletable_grid(
         )
     }
 
-    const CELL_SIZE: usize = TILE_SIZE * 2;
+    fn rect_for_grid_cell(cell_x: usize, cell_y: usize, cell_size: f32) -> Rect {
+        Rect::from_min_size(
+            pos2(cell_x as f32, cell_y as f32) * cell_size,
+            Vec2::splat(cell_size),
+        )
+    }
 
-    let ttb = &tileset.tiletable;
-    let num_lines = ttb.len().div_ceil(entries_per_row);
+    let model = BlockTilemapModel {
+        blocks: &FullTiletableModel {
+            len: layout.tiletable.valid_range().map_or(0, |(_, end)| end),
+        },
+        tiletable_get: |i| {
+            let (tileset, offset) = layout.tiletable.lookup(i)?;
+            tileset.tiletable.get(offset).copied()
+        },
+    };
 
     let mut meshes_per_palette = [const { None }; 8]; // TODO constant for num palette lines
 
     let (res, p) = ui.allocate_painter(
-        (CELL_SIZE as f32) * scale * vec2(entries_per_row as f32, num_lines as f32),
+        scale * Vec2::from(model.dimensions().map(|x| (x * TILE_SIZE) as f32)),
         Sense::CLICK,
     );
     // Required to avoid NEAREST filtering artifacts/shimmer
     let rounded_origin = res.rect.min.round_to_pixels(ui.pixels_per_point());
 
-    for (line, y_pos) in ttb.chunks(entries_per_row).zip((0..).step_by(CELL_SIZE)) {
-        for (TiletableEntry(tiles), x_pos) in line.iter().zip((0..).step_by(CELL_SIZE)) {
-            for (tile, rect_offset) in tiles.iter().zip(&[
-                (0, 0),
-                (TILE_SIZE, 0),
-                (0, TILE_SIZE),
-                (TILE_SIZE, TILE_SIZE),
-            ]) {
-                if tile.tile_id() >= tileset.gfx.len() {
-                    continue;
-                }
+    for tile_y in 0..model.dimensions()[1] {
+        for tile_x in 0..model.dimensions()[0] {
+            let Some(tile) = model.get(tile_x, tile_y) else {
+                continue;
+            };
 
-                let tile_rect = Rect::from_min_size(
-                    pos2(
-                        (x_pos + rect_offset.0) as f32,
-                        (y_pos + rect_offset.1) as f32,
-                    ),
-                    Vec2::splat(TILE_SIZE as f32),
+            let tile_rect = rect_for_grid_cell(tile_x, tile_y, TILE_SIZE as f32);
+
+            let (mesh, texture) = meshes_per_palette[tile.palette()].get_or_insert_with(|| {
+                let texture = get_tileset_gfx_texture(
+                    ui.ctx(),
+                    &layout.gfx,
+                    layout.palette_source,
+                    u8::try_from(tile.palette()).unwrap(),
                 );
+                (Mesh::with_texture(texture.id()), texture)
+            });
+            let texture_row = tile.tile_id() / (texture.size()[0] / TILE_SIZE);
+            let texture_col = tile.tile_id() % (texture.size()[0] / TILE_SIZE);
 
-                let (mesh, texture) = meshes_per_palette[tile.palette()].get_or_insert_with(|| {
-                    let texture = get_tileset_gfx_texture(
-                        ui.ctx(),
-                        &gfx_layout,
-                        u8::try_from(tile.palette()).unwrap(),
-                    );
-                    (Mesh::with_texture(texture.id()), texture)
-                });
-                let tile_row = tile.tile_id() / (texture.size()[0] / TILE_SIZE);
-                let tile_col = tile.tile_id() % (texture.size()[0] / TILE_SIZE);
-
-                let mut uv = Rect::from_min_size(
-                    pos2((tile_col * TILE_SIZE) as f32, (tile_row * TILE_SIZE) as f32),
-                    Vec2::splat(TILE_SIZE as f32),
-                );
-                if tile.h_flip() {
-                    mem::swap(&mut uv.min.x, &mut uv.max.x);
-                }
-                if tile.v_flip() {
-                    mem::swap(&mut uv.min.y, &mut uv.max.y);
-                }
-
-                mesh.add_rect_with_uv(
-                    (tile_rect * scale).translate(rounded_origin.to_vec2()),
-                    scale_rect_by_vec2(uv, texture.size_vec2()),
-                    Color32::WHITE,
-                );
+            let mut uv = rect_for_grid_cell(texture_col, texture_row, TILE_SIZE as f32);
+            if tile.h_flip() {
+                mem::swap(&mut uv.min.x, &mut uv.max.x);
             }
+            if tile.v_flip() {
+                mem::swap(&mut uv.min.y, &mut uv.max.y);
+            }
+
+            mesh.add_rect_with_uv(
+                (tile_rect * scale).translate(rounded_origin.to_vec2()),
+                scale_rect_by_vec2(uv, texture.size_vec2()),
+                Color32::WHITE,
+            );
         }
     }
 
