@@ -10,7 +10,7 @@ use egui::{
     Color32, ColorImage, Mesh, Rect, Response, Sense, TextureFilter, TextureHandle, TextureOptions,
     Ui, Vec2, pos2,
 };
-use std::{array, mem};
+use std::{iter, mem};
 
 struct FullTilesetGfxModel {
     len: usize,
@@ -47,13 +47,9 @@ pub fn get_tileset_gfx_texture(
         palette_line,
     };
     TileTextureCache::get_or_insert_with(ctx, cache_key, |ctx, cache_key| {
-        let palette = array::from_fn(|i| {
-            if i == 0 {
-                palette_source.palette.as_4bpp_lines()[usize::from(palette_line)].map(Color32::from)
-            } else {
-                [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]
-            }
-        });
+        let palette_line = &palette_source.palette.as_4bpp_lines()[usize::from(palette_line)];
+        let palette = iter::once(palette_line.map(Color32::from))
+            .collect_to_array_padded(|| [Color32::MAGENTA; Palette::LINE_4BPP_LEN]);
 
         let (size, pixels) = Snes4BppTile::tiles_to_image(
             |tile_id| {
@@ -125,11 +121,11 @@ fn tiletable_to_image(
     layout: &LoadedTilesetLayout<&Tileset>,
     model: &impl GridModel<Item = LevelDataEntry>,
 ) -> ([usize; 2], Vec<Color32>) {
-    let palettes_c32: [_; 8] = layout
+    let palettes_c32: [_; TilemapEntry::ADDRESSABLE_PALETTES] = layout
         .palette_source
         .palette
         .to_4bpp_color32_lines()
-        .collect_to_array_padded(|| [Color32::TRANSPARENT; Palette::LINE_4BPP_LEN]);
+        .collect_to_array_padded(|| [Color32::MAGENTA; Palette::LINE_4BPP_LEN]);
 
     Snes4BppTile::tiles_to_image(
         |tile_id| {
@@ -229,7 +225,7 @@ pub fn draw_tiletable_grid(
         },
     };
 
-    let mut meshes_per_palette = [const { None }; 8]; // TODO constant for num palette lines
+    let mut meshes_per_palette = [const { None }; TilemapEntry::ADDRESSABLE_PALETTES];
 
     let (res, p) = ui.allocate_painter(
         scale * Vec2::from(model.dimensions().map(|x| (x * TILE_SIZE) as f32)),

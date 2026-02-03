@@ -126,7 +126,8 @@ fn load_smart_tileset(
 
     let mut palette = Palette::from(tileset.palette);
     if !palette.is_empty()
-        && let Err(()) = palette.truncate_checked(Palette::LINE_4BPP_LEN * 8)
+        && let Err(()) =
+            palette.truncate_checked(Palette::LINE_4BPP_LEN * TilemapEntry::ADDRESSABLE_PALETTES)
     {
         return Err(anyhow!(
             "Tileset {index:02X} palette has too many (non-blank) lines"

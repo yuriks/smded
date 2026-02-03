@@ -28,11 +28,12 @@ impl From<SnesColor> for Color32 {
 
 pub struct Palette(pub Vec<SnesColor>);
 
+type PaletteLine4Bpp<Color> = [Color; Palette::LINE_4BPP_LEN];
+
 impl Palette {
     pub const LINE_4BPP_LEN: usize = 16;
-    pub const LINE_2BPP_LEN: usize = 4;
 
-    pub fn as_4bpp_lines(&self) -> &[[SnesColor; Self::LINE_4BPP_LEN]] {
+    pub fn as_4bpp_lines(&self) -> &[PaletteLine4Bpp<SnesColor>] {
         let (lines, rest) = self.0.as_chunks();
         if !rest.is_empty() {
             warn!("Palette contains {} leftover entries", rest.len());
@@ -40,19 +41,10 @@ impl Palette {
         lines
     }
 
-    pub fn to_4bpp_color32_lines(&self) -> impl Iterator<Item = [Color32; Self::LINE_4BPP_LEN]> {
+    pub fn to_4bpp_color32_lines(&self) -> impl Iterator<Item = PaletteLine4Bpp<Color32>> {
         self.as_4bpp_lines()
             .iter()
             .map(|line| line.map(Color32::from))
-    }
-
-    #[expect(unused)]
-    pub fn as_2bpp_lines(&self) -> &[[SnesColor; Self::LINE_2BPP_LEN]] {
-        let (lines, rest) = self.0.as_chunks();
-        if !rest.is_empty() {
-            warn!("Palette contains {} leftover entries", rest.len());
-        }
-        lines
     }
 
     pub fn truncate_checked(&mut self, new_len: usize) -> Result<(), ()> {
@@ -99,6 +91,7 @@ impl TilemapEntry {
         self.0.get_bit(13)
     }
 
+    pub const ADDRESSABLE_PALETTES: usize = 1 << 3;
     pub fn palette(self) -> usize {
         usize::from(self.0.get_bits(10..13))
     }
@@ -146,7 +139,7 @@ impl Snes4BppTile {
 
     pub fn write_to_image<'p, const H_FLIP: bool, const USE_TRANSPARENCY: bool>(
         &self,
-        palette: &[Color32; Palette::LINE_4BPP_LEN],
+        palette: &PaletteLine4Bpp<Color32>,
         output: impl Iterator<Item = &'p mut [Color32; TILE_SIZE]>,
     ) {
         for (mut bp, out_row) in self.bitplane_sets().map(decode_bitplanes).zip(output) {
@@ -169,7 +162,7 @@ impl Snes4BppTile {
 
     pub fn write_to_image_flippable<'p, const USE_TRANSPARENCY: bool>(
         &self,
-        palette: &[Color32; Palette::LINE_4BPP_LEN],
+        palette: &PaletteLine4Bpp<Color32>,
         output_slivers: impl DoubleEndedIterator<Item = &'p mut [Color32; TILE_SIZE]>,
         flips: [bool; 2],
     ) {
@@ -183,7 +176,7 @@ impl Snes4BppTile {
 
     pub fn tiles_to_image<'p>(
         mut get_tile: impl FnMut(usize) -> Option<&'p Snes4BppTile>,
-        palette: &[[Color32; Palette::LINE_4BPP_LEN]; 8],
+        palette: &[PaletteLine4Bpp<Color32>; TilemapEntry::ADDRESSABLE_PALETTES],
         model: &impl GridModel<Item = TilemapEntry>,
     ) -> ([usize; 2], Vec<Color32>) {
         let [tiles_per_row, n_rows] = model.dimensions();
