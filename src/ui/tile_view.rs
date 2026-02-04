@@ -1,8 +1,8 @@
 mod cache;
 
 use crate::gfx::{GridModel, Palette, Snes4BppTile, TILE_SIZE, TilemapEntry};
-use crate::project::{LevelDataEntry, Tileset, TiletableEntry};
-use crate::tileset::{LoadedTilesetLayout, OverlaidLayout};
+use crate::project::LevelDataEntry;
+use crate::tileset::{LoadedTilesetLayout, OverlaidLayout, Tileset, TiletableEntry};
 use crate::ui::tile_view::cache::{TileCacheKey, TileTextureCache};
 use crate::util::IteratorArrayExt;
 use egui::emath::GuiRounding;

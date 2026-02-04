@@ -1,6 +1,7 @@
 use crate::gfx::SnesColor;
-use crate::project::{ProjectData, Tileset, TilesetKind, TilesetRef};
+use crate::project::ProjectData;
 use crate::tileset;
+use crate::tileset::{Tileset, TilesetKind, TilesetRef};
 use crate::ui::tile_view;
 use crate::ui::views::EditorWindow;
 use egui::emath::GuiRounding;

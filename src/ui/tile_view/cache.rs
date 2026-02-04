@@ -1,5 +1,4 @@
-use crate::project::TilesetRef;
-use crate::tileset::{LoadedTilesetLayout, OverlaidLayout};
+use crate::tileset::{LoadedTilesetLayout, OverlaidLayout, TilesetRef};
 use egui::cache::CacheTrait;
 use egui::{Context, TextureHandle};
 use std::any::Any;

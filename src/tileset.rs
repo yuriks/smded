@@ -1,4 +1,109 @@
-use crate::project::Tileset;
+use crate::gfx::{Palette, Snes4BppTile, TilemapEntry};
+use crate::smart_xml;
+use anyhow::anyhow;
+use std::cmp::Ordering;
+
+#[derive(Copy, Clone)]
+pub struct TiletableEntry(pub [TilemapEntry; 4]);
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum TilesetKind {
+    /// Main, area-specific tileset data
+    Sce,
+    /// Common room elements. Shared set of tiles that are loaded together with an SCE.
+    Cre,
+}
+
+slotmap::new_key_type! { pub struct TilesetRef; }
+pub type TilesetIndex = u8;
+
+pub struct Tileset {
+    handle: TilesetRef,
+    index: Option<TilesetIndex>,
+    pub name: String,
+    pub kind: TilesetKind,
+
+    pub palette: Palette,
+    pub gfx: Vec<Snes4BppTile>,
+    pub tiletable: Vec<TiletableEntry>,
+}
+
+impl Tileset {
+    pub fn handle(&self) -> TilesetRef {
+        self.handle
+    }
+
+    #[expect(unused)]
+    pub fn index(&self) -> Option<TilesetIndex> {
+        self.index
+    }
+
+    pub fn title(&self) -> String {
+        if let Some(index) = self.index {
+            format!("[{index:02X}] {}", self.name)
+        } else {
+            format!("[??] {}", self.name)
+        }
+    }
+
+    pub fn display_cmp(&self, o: &Self) -> Ordering {
+        self.kind
+            .cmp(&o.kind)
+            .then(self.index.cmp(&o.index))
+            .then_with(|| self.name.cmp(&o.name))
+            .then(self.handle.cmp(&o.handle))
+    }
+}
+
+pub fn load_from_smart(
+    kind: TilesetKind,
+    index: u8,
+    tileset: smart_xml::Tileset,
+    handle: TilesetRef,
+) -> anyhow::Result<Tileset> {
+    let name = tileset
+        .metadata
+        .map_or("Unnamed Tileset".into(), |meta| meta.name);
+
+    let mut palette = Palette::from(tileset.palette);
+    if !palette.is_empty()
+        && let Err(()) =
+            palette.truncate_checked(Palette::LINE_4BPP_LEN * TilemapEntry::ADDRESSABLE_PALETTES)
+    {
+        return Err(anyhow!(
+            "Tileset {index:02X} palette has too many (non-blank) lines"
+        ));
+    }
+
+    let (tile_bytes, rest) = tileset.gfx.as_chunks();
+    if !rest.is_empty() {
+        return Err(anyhow!(
+            "Tileset {index:02X} gfx not evenly divisible as tiles"
+        ));
+    }
+    let gfx = tile_bytes.iter().map(Snes4BppTile::from_bytes).collect();
+
+    let (tiletable_entries, rest) = tileset.tiletable.as_chunks::<4>();
+    if !rest.is_empty() {
+        return Err(anyhow!(
+            "Tileset {index:02X} tiletable has truncated trailing entry"
+        ));
+    }
+    let tiletable = tiletable_entries
+        .iter()
+        .map(|tiles| TiletableEntry(tiles.map(TilemapEntry)))
+        .collect();
+
+    Ok(Tileset {
+        handle,
+        index: Some(index),
+        kind,
+        name,
+        palette,
+        gfx,
+        tiletable,
+    })
+}
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct OverlaidLayoutEntry<Ref> {
