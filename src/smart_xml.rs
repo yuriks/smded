@@ -463,8 +463,7 @@ fn read_xml_file<T: DeserializeOwned>(path: &Path) -> Result<T> {
 }
 
 #[tracing::instrument]
-pub fn load_project_rooms(project_path: &Path) -> Result<BTreeMap<(HexU8, HexU8), (String, Room)>> {
-    use heck::ToUpperCamelCase;
+pub fn load_project_rooms(project_path: &Path) -> Result<BTreeMap<(u8, u8), (String, Room)>> {
     use std::collections::btree_map::Entry;
 
     let mut rooms = BTreeMap::new();
@@ -478,22 +477,20 @@ pub fn load_project_rooms(project_path: &Path) -> Result<BTreeMap<(HexU8, HexU8)
             continue;
         }
 
-        let room_name = path
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_upper_camel_case();
+        let room_name = path.file_stem().unwrap().to_string_lossy().into_owned();
         let room: Room = read_xml_file(&path)?;
 
-        match rooms.entry((room.area, room.index)) {
+        match rooms.entry((room.area.into(), room.index.into())) {
             Entry::Vacant(e) => {
                 e.insert((room_name, room));
             }
             Entry::Occupied(e) => {
-                let (area_index, room_index) = e.key();
+                let &(area_index, room_index) = e.key();
                 let old_name = &e.get().0;
                 return Err(anyhow!(
-                    "Duplicate rooms with id ({area_index},{room_index}): \"{old_name}\" and \"{room_name}\""
+                    "Duplicate rooms with id ({},{}): \"{old_name}\" and \"{room_name}\"",
+                    HexU8(area_index),
+                    HexU8(room_index)
                 ));
             }
         }

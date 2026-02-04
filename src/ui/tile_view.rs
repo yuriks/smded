@@ -1,7 +1,7 @@
 mod cache;
 
 use crate::gfx::{GridModel, Palette, Snes4BppTile, TILE_SIZE, TilemapEntry};
-use crate::project::LevelDataEntry;
+use crate::room::LevelDataEntry;
 use crate::tileset::{LoadedTilesetLayout, OverlaidLayout, Tileset, TiletableEntry};
 use crate::ui::tile_view::cache::{TileCacheKey, TileTextureCache};
 use crate::util::IteratorArrayExt;

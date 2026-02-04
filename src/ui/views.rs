@@ -1,3 +1,4 @@
+mod room_editor;
 mod startup_dialog;
 mod tileset_editor;
 mod workspace;

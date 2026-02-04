@@ -1,6 +1,7 @@
 mod gfx;
 mod hex_types;
 mod project;
+mod room;
 #[allow(unused)]
 mod smart_xml;
 mod tileset;
