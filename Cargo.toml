@@ -4,6 +4,9 @@ description = "The Super Metroid Disassembly Editor"
 version = "0.1.0"
 edition = "2024"
 
+[profile.dev]
+opt-level = 1
+
 [dependencies]
 anyhow = "1.0.100"
 bit_field = "0.10.3"
