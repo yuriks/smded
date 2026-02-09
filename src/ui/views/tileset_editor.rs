@@ -45,10 +45,6 @@ impl TilesetEditor {
         }
     }
 
-    fn tileset<'p>(&self, project_data: &'p ProjectData) -> Option<&'p Tileset> {
-        project_data.tilesets.get(self.tileset)
-    }
-
     fn draw_palette_grid(ui: &mut Ui, palette_lines: &[[SnesColor; 16]]) -> Response {
         const CELL_SIZE: f32 = 16.0;
 
@@ -72,7 +68,7 @@ impl TilesetEditor {
 
 impl EditorWindow for TilesetEditor {
     fn title(&self, project_data: &ProjectData) -> String {
-        let tileset = self.tileset(project_data);
+        let tileset = project_data.tilesets.get(self.tileset);
         format!(
             "Tileset: {}",
             tileset.map_or("<UNKNOWN>".into(), |t| t.title())
@@ -84,7 +80,7 @@ impl EditorWindow for TilesetEditor {
     }
 
     fn show_contents(&mut self, project_data: &mut ProjectData, ui: &mut Ui) {
-        let Some(tileset) = self.tileset(project_data) else {
+        let Some(tileset) = project_data.tilesets.get(self.tileset) else {
             ui.close();
             return;
         };
@@ -142,8 +138,11 @@ impl EditorWindow for TilesetEditor {
                         .max_height(f32::INFINITY)
                         .id_salt("tiletable_scrollarea")
                         .show(ui, |ui| {
-                            let tex_handle =
-                                tile_view::get_tileset_ttb_texture(ui.ctx(), &tileset_layout);
+                            let tex_handle = tile_view::get_tileset_ttb_texture(
+                                ui.ctx(),
+                                &tileset_layout,
+                                false,
+                            );
                             let sized_texture = SizedTexture::from_handle(&tex_handle);
 
                             let scale_factor = 2.0.round_to_pixels(ui.pixels_per_point());

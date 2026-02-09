@@ -15,6 +15,7 @@ pub enum TileCacheKey {
     },
     LoadedTilesetLayout {
         layout: LoadedTilesetLayout<TilesetRef>,
+        with_transparency: bool,
     },
 }
 
@@ -40,8 +41,15 @@ impl TileCacheKey {
                 write!(s, "-pal{palette_line:X}[{palette_source:?}]").unwrap();
                 s
             }
-            TileCacheKey::LoadedTilesetLayout { layout } => {
-                layout_cache_texture_name(&layout.tiletable) + "-ttb"
+            TileCacheKey::LoadedTilesetLayout {
+                layout,
+                with_transparency,
+            } => {
+                let mut s = layout_cache_texture_name(&layout.tiletable) + "-ttb";
+                if *with_transparency {
+                    s += "-transparency";
+                }
+                s
             }
         }
     }

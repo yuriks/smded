@@ -33,6 +33,10 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
     let mut project = ProjectData::default();
 
     let smart_tilesets = smart_xml::load_project_tilesets(project_path)?;
+    project
+        .tilesets
+        .reserve(smart_tilesets.sce.len() + smart_tilesets.cre.len());
+
     for (index, tileset) in smart_tilesets.sce {
         // TODO encapsulate the combination of SlotMap + BTreeMap for index
         let tileset_ref = project.tilesets.try_insert_with_key(|handle| {
@@ -49,12 +53,14 @@ pub fn load_smart_project(project_path: &Path) -> anyhow::Result<ProjectData> {
     }
 
     let smart_rooms = smart_xml::load_project_rooms(project_path)?;
+    let mut rooms = SlotMap::with_capacity_and_key(smart_rooms.len());
+
     for (index, (room_name, room)) in smart_rooms {
-        let room_ref = project
-            .rooms
+        let room_ref = rooms
             .try_insert_with_key(|handle| room::load_from_smart(index, room_name, room, handle))?;
         project.room_ids.insert(index, room_ref);
     }
+    project.rooms = rooms;
 
     Ok(project)
 }
