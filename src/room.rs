@@ -184,7 +184,6 @@ impl Room {
         self.handle
     }
 
-    #[expect(unused)]
     pub fn index(&self) -> Option<RoomIndex> {
         self.index
     }

@@ -269,7 +269,7 @@ impl RoomEditor {
 impl EditorWindow for RoomEditor {
     fn title(&self, project_data: &ProjectData) -> String {
         if let Some(room) = project_data.rooms.get(self.room) {
-            format!("Room: {}", &room.name)
+            format!("Room: {}", room.title())
         } else {
             format!("Room: <{:?}>", self.room)
         }

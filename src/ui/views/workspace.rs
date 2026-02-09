@@ -3,6 +3,8 @@ use crate::ui::views::EditorWindow;
 use crate::ui::views::room_editor::RoomEditor;
 use crate::ui::views::tileset_editor::TilesetEditor;
 use egui::{LayerId, Order};
+use heck::ToTitleCase;
+use itertools::Itertools;
 
 pub struct Workspace {
     project_data: ProjectData,
@@ -40,13 +42,34 @@ impl Workspace {
         egui::SidePanel::left("editor_list").show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.collapsing("Rooms", |ui| {
-                    for (room_ref, room) in &self.project_data.rooms {
-                        if ui
-                            .add(egui::Button::new(room.title()).frame_when_inactive(false))
-                            .clicked()
-                        {
-                            new_editor = Some(Box::new(RoomEditor::new(room_ref)));
-                        }
+                    let rooms_by_area = self
+                        .project_data
+                        .rooms
+                        .iter()
+                        .chunk_by(|(_, room)| room.index().map(|(area, _)| area));
+                    for (area, area_rooms) in &rooms_by_area {
+                        let area_str = if let Some(area) = area {
+                            format!("Area {area}")
+                        } else {
+                            "Area ?".into()
+                        };
+
+                        ui.collapsing(area_str, |ui| {
+                            for (room_ref, room) in area_rooms {
+                                let print_name = room.name.to_title_case();
+                                let room_str = if let Some((_, room)) = room.index() {
+                                    format!("[{room:02X}] {print_name}")
+                                } else {
+                                    format!("[??] {print_name}")
+                                };
+                                if ui
+                                    .add(egui::Button::new(room_str).frame_when_inactive(false))
+                                    .clicked()
+                                {
+                                    new_editor = Some(Box::new(RoomEditor::new(room_ref)));
+                                }
+                            }
+                        });
                     }
                 });
                 ui.collapsing("Tilesets", |ui| {
