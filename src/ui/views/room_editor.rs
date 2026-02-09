@@ -8,7 +8,9 @@ use crate::tileset;
 use crate::tileset::{LoadedTilesetLayout, Tileset};
 use crate::ui::tile_view;
 use crate::ui::views::EditorWindow;
-use egui::{Align2, Color32, FontId, Id, Rect, Sense, StrokeKind, Ui, UiBuilder, Vec2, vec2};
+use egui::{
+    Align2, Color32, FontId, Id, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2, vec2,
+};
 use std::any::Any;
 
 const ID_SALT: &str = concat!(module_path!(), "::RoomEditor");
@@ -189,6 +191,15 @@ impl EditorLayer for GridLayer {
         ui: &mut Ui,
         zoom: f32,
     ) {
+        const MINOR_GRID_STROKE: Stroke = Stroke {
+            width: 1.0,
+            color: Color32::GRAY,
+        };
+        const MAJOR_GRID_STROKE: Stroke = Stroke {
+            width: 1.5,
+            color: Color32::GRAY,
+        };
+
         let block_size = BLOCK_SIZE_PX as f32 * zoom;
         tile_view::draw_each_screen(
             [room.width, room.height].map(usize::from),
@@ -198,18 +209,18 @@ impl EditorLayer for GridLayer {
                 let p = ui.painter();
                 for x in 1..SCREEN_SIZE_BLOCKS {
                     let x = rect.left() + (x as f32 * block_size);
-                    p.vline(x, rect.y_range(), (1.0, Color32::GRAY));
+                    p.vline(x, rect.y_range(), MINOR_GRID_STROKE);
                 }
                 for y in 0..SCREEN_SIZE_BLOCKS {
                     let y = rect.top() + (y as f32 * block_size);
-                    p.hline(rect.x_range(), y, (1.0, Color32::GRAY));
+                    p.hline(rect.x_range(), y, MINOR_GRID_STROKE);
                 }
 
                 if screen_x > 0 {
-                    p.vline(rect.left(), rect.y_range(), (2.0, Color32::GRAY));
+                    p.vline(rect.left(), rect.y_range(), MAJOR_GRID_STROKE);
                 }
                 if screen_y > 0 {
-                    p.hline(rect.x_range(), rect.top(), (2.0, Color32::GRAY));
+                    p.hline(rect.x_range(), rect.top(), MAJOR_GRID_STROKE);
                 }
             },
         );
